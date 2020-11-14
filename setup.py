@@ -7,7 +7,7 @@ import os
 from setuptools import find_packages, setup
 
 # Package meta-data.
-NAME = 'someapp'
+NAME = 'accelerator'
 DESCRIPTION = 'Accelerator NLP project'
 EMAIL = 'anne.griffith@ons.gov.uk'
 URL = ''
