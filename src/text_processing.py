@@ -175,7 +175,7 @@ def reduce_dimensionality(vector_col: pd.Series):
     # There have been issues with the umap import
     import umap
 
-    logger.info("Applying umap to reduce dimension")
+    logger.info("Now applying umap to reduce dimension")
     vecs = np.array(list(vector_col.values))
 
     clusterable_embedding = umap.UMAP(
@@ -188,6 +188,42 @@ def reduce_dimensionality(vector_col: pd.Series):
 
     return pd.Series(data=clusterable_embedding.tolist(), index=vector_col.index)
 
+def reduce_dimensionality_supervised(vector_col: pd.Series, target_col: pd.Series):
+    # There have been issues with the umap import
+    import umap
+
+    logger.info("Now applying umap to reduce dimension")
+    vecs = np.array(list(vector_col.values))
+    target = np.array(list(target_col.values))
+    
+    clusterable_embedding = umap.UMAP(
+        n_neighbors=10,
+        min_dist=0.0,
+        n_components=10,
+        random_state=RANDOM_STATE,
+        verbose=10,
+    ).fit_transform(vecs, y=target)
+
+    return pd.Series(data=clusterable_embedding.tolist(), index=vector_col.index)
+
+def train_predict_umap(vector_col: pd.Series, target_col: pd.Series, test_col: pd.Series):
+    # There have been issues with the umap import
+    import umap
+
+    logger.info("Now applying umap to reduce dimension")
+    vecs = np.array(list(vector_col.values))
+    target = np.array(list(target_col.values))
+    test = np.array(list(test_col.values))
+    
+    mapper = umap.UMAP(n_neighbors=10,
+                        min_dist=0.0,
+                        n_components=10,
+                        random_state=RANDOM_STATE,
+                        verbose=10,                     
+                      ).fit(vecs,target)   
+    
+    test_embedding = mapper.transform(test)
+    return pd.Series(data=test_embedding.tolist(), index=test_col.index)
 
 def cluster(vector_col: pd.Series):
 
