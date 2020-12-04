@@ -7,8 +7,17 @@ We wish to get rid of these exclusions so we can do text analysis on what is exc
 
 """
 
+def remove_exclusions(df, col, excl_col):
+    """ function to remove exclusions from the description in the column 'col' from dataframe 'df' and put the excluded text in column 'excl_col' 
+         takes in a dataframe and the target column, the name for exclusions and returns the dataframe with the target column cleaned and exclusions
+    """
+    df1= bracket_exclusions(df,col,excl_col)
+    
+    df2 = reg_excludes(df1, col, excl_col)
+    
+    return df2
 
-def bracket_exclusions(df1,col_old):
+def bracket_exclusions(df1,col_old,excl_col):
     """ function to remove exclusions from the description which appear in brackets 
          takes in a dataframe and the target column, and returns the dataframe with the target column cleaned
     """
@@ -16,7 +25,9 @@ def bracket_exclusions(df1,col_old):
     ex_str = r'(\(except(.*?)\)|\(excl(.*?)\)|\(without(.*?)\)|\(not (.*?)\)|\(other than (.*?)\))'
     df['Excl_removed'] = ''
     df['Excl_removed'] = df[col_old].str.extract(ex_str)
-    df[col_old+'_excl_rem'] = df[col_old].str.replace(ex_str, '')
+    df[col_old] = df[col_old].str.replace(ex_str, '')
+
+    
     return df
 
 def reg_excludes(df1,col_old, excl_col):
@@ -50,7 +61,6 @@ def reg_excludes(df1,col_old, excl_col):
     ex_strs = [ex_str, ex_str0, ex_str1, ex_str1a, ex_str1b, ex_str1c, ex_str2, ex_str3]
     for s in ex_strs:
         name = f'{excl_col}_{str(i)}'
-        print(name)
         df[name] = ''
         df[name]= df['Temp'].str.extract(s, expand=True)
         df['Temp'] = df['Temp'].str.replace(s, '')
@@ -61,7 +71,7 @@ def reg_excludes(df1,col_old, excl_col):
         i+=1
       #  get_string(df[df[name].notnull()][name])
     # create our new column with these items excluded
-    df[col_old+'_excl_rem'] = df['Temp']
+    df[col_old+'_cleaned'] = df['Temp']
     # prepare dataframe to be returned
 
     df2 = df.copy().drop(excl_list +['Temp',col_old],axis=1)
