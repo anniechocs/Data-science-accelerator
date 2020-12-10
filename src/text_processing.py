@@ -9,7 +9,7 @@ Simplified version of a text processing pipeline.
     * reduce dimension
     * cluster
 
-Sources:
+Sources:l
     https://www.kaggle.com/tmdb/tmdb-movie-metadata
     https://fasttext.cc/docs/en/pretrained-vectors.html
     https://radimrehurek.com/gensim_3.8.3/models/fasttext.html
@@ -139,7 +139,6 @@ def get_category_description(level_wanted):
     elif cat == 'Category_1':
         Cat_1_descrip = CPA[CPA.Level==1][['Category_1','Descr']].rename(columns={'Descr':'Cat_1_Description'})
         Cat_1_descrip['Cat_1_Description'] = Cat_1_descrip.Cat_1_Description.str.title()
-        Cat_1_descrip.loc[Cat_1_descrip.Category_1=='T']['Cat_1_Description'] = 'hello'
         Cat_1_descrip['Cat_1_Description'] = Cat_1_descrip['Cat_1_Description'].replace('And','and', regex=True)
         Cat_1_descrip['Cat_1_Description'] = Cat_1_descrip['Cat_1_Description'].where(Cat_1_descrip['Category_1']!='T','Services Of Households As Employers etc')
         Cat_1_descrip['Cat_1_Description'] = Cat_1_descrip['Cat_1_Description'].where(Cat_1_descrip['Category_1']!='G','Wholesale and Retail Trade Services, Motor Services')
@@ -189,14 +188,15 @@ def clean_text(text: str):
     return no_stopwords
 
 
-def clean_col(df: pd.DataFrame, col: str):
-    """Prepare column for text processing.
+def clean_cols(df: pd.DataFrame, cols: list):
+    """Prepare columns for text processing.
 
     Returns:
-        Same dataframe with an additional column for cleaned text.
+        Same dataframe with an additional columns for cleaned text.
     """
-    logger.info(f"Cleaning column: {col} ")
-    df[f"{col}_cleaned"] = df[col].fillna("").apply(clean_text)
+    for col in cols:
+        logger.info(f"Cleaning column: {col} ")
+        df[f"{col}_cleaned"] = df[col].fillna("").apply(clean_text)
     return df
 
 
@@ -301,10 +301,16 @@ def plot_scat(df, cat, plt_title):
     plt.legend(fontsize='16', loc='upper left', bbox_to_anchor=(1, 1), ncol=1)
 
 # a function to produce a scatter plot
-def plotly_scat(df,cat, true_cols, titl):
+def plotly_scat(df,cat, titl):
+    
+    i=2
     import plotly.express
-    x = df.columns[-2]
-    y = df.columns[-1]
+#     x = df.columns[-2]
+#     y = df.columns[-1]
+    df['x'] = df.Low_dim.apply(lambda x: x[2*i])
+    df['y'] = df.Low_dim.apply(lambda x: x[2*i +1])
+    x = df.x
+    y = df.y
     
     if len(cat) == 1:
         # get a dataframe with descriptions for the category level we are investigating
@@ -313,13 +319,16 @@ def plotly_scat(df,cat, true_cols, titl):
         descr = descr_df.columns[1]
         plot_df = df.merge(descr_df, on = categ,  how='left')
     else:
-        plot_df = df
+        plot_df = df1[[categ,"Descr_cleaned", "Code", "Low_dim","label"]].copy()
+       # plot_df['Category'] = plot_df['Category_1'].astype(str)
+
         categ = cat
 
     hover = {
         "x": False,
         "y": False
         }
+    true_cols = ['Descr_cleaned','label']
     for col in true_cols:
         hover[col] = True
     fig = plotly.express.scatter(
@@ -350,9 +359,10 @@ def cluster(vector_col: pd.Series):
 
     vecs = np.array(list(vector_col))
 
-    labels = hdbscan.HDBSCAN().fit_predict(vecs)
+    labels1 = hdbscan.HDBSCAN().fit_predict(vecs)
+    labels = pd.Series(data=labels1.tolist(), index=vector_col.index).astype(str)
 
-    return pd.Series(data=labels.tolist(), index=vector_col.index)
+    return labels
 
 
 def evaluate(df, original, labels):
@@ -379,6 +389,19 @@ def plot_embedding(df):
     plt.scatter(vecs[:, 0], vecs[:, 1], c=target, s=0.1, cmap="Spectral")
 
     plt.show()
+    
+
+def show_group(df, search_col, start_str):
+    l = len(start_str)
+    df1 = df[df[search_col].str[:l] == start_str]
+    cols = ['Code', 'Descr', 'Includes','label']
+    return df1[cols]
+    
+def search_col(df, search_col, st):
+    st1 = st.lower()
+    df1 = df[df[search_col].fillna('').str.contains(st1)]
+    cols = ['Code', 'Descr', 'Includes','label']
+    return df1[cols]
 
 
 if __name__ == "__main__":
