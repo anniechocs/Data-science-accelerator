@@ -22,12 +22,11 @@ def bracket_exclusions(df1,col_old,excl_col):
          takes in a dataframe and the target column, and returns the dataframe with the target column cleaned
     """
     df= df1.copy()
-    ex_str = r'(\(except(.*?)\)|\(excl(.*?)\)|\(without(.*?)\)|\(not (.*?)\)|\(other than (.*?)\))'
-    df['Excl_removed'] = ''
-    df['Excl_removed'] = df[col_old].str.extract(ex_str)
+    ex_str = r'(\(except(.*?)\)|\(excl(.*?)\)|\(without(.*?)\)|\(not (.*?)\)|\(other than (.*?)\)|n.e.s.)'
+    df[excl_col] = ''
+    df[excl_col] = df[col_old].str.extract(ex_str)
     df[col_old] = df[col_old].str.replace(ex_str, '')
 
-    
     return df
 
 def reg_excludes(df1,col_old, excl_col):
@@ -37,6 +36,7 @@ def reg_excludes(df1,col_old, excl_col):
     """
     df= df1.copy()
     df['Temp'] = df[col_old]
+    df[col_old + '_old'] = df[col_old].copy()
     # remove exceptions in brackets
     ex_str = r'(\(except(.*?)\)|\(excl(.*?)\)|\(without(.*?)\)|\(not (.*?)\)|\(other than (.*?)\))'
     # unnecessary phrases:
@@ -44,7 +44,6 @@ def reg_excludes(df1,col_old, excl_col):
     # sometimes there is "include" info after a phrase of the pattern "except... ;" or "excelpt... ."
     ex_str1 = r'(, except.*?\.|, excl.*?\.|, without.*\.|, not\b.*?\.| not\b.*?\.| not\b.*?\)|, other than .*?\.)'
     ex_str1a = r'(, except.*?;|, excl.*?;|, without.*;|,\bnot\b.*?;|\bnot\b.*?;| not\b.*?\)|, other than .*?;)'
-
     # sometimes there is "include" info after a phrase of the pattern  "except..., and"
     ex_str1b = r'(, except.*?(, and)|, excl.*?(, and)|, without.*(, and))'
     # the phrases separated by a comma, eg "except..., " usually are followed by "exclude" info and occur at the end of the description.
@@ -72,6 +71,9 @@ def reg_excludes(df1,col_old, excl_col):
       #  get_string(df[df[name].notnull()][name])
     # create our new column with these items excluded
     df[col_old+'_cleaned'] = df['Temp']
+    # prepare dataframe to be returned
+
+
     # prepare dataframe to be returned
 
     df2 = df.copy().drop(excl_list +['Temp',col_old],axis=1)

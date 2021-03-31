@@ -34,6 +34,8 @@ import numpy as np
 import pandas as pd
 import sklearn
 
+import file_import_helper
+
 CONFIG_FILEPATH = os.path.join(
     os.path.expanduser("~"), "text_processing_config.ini"
 )
@@ -74,33 +76,48 @@ STOPWORDS = fetch_stopwords()
 RANDOM_STATE = 3052528580
 
 def fetch_files():
-    data_path = "../data/processed/"
-    CPA = pd.read_csv(data_path + "CPA_data_cleaned.csv")
-    logger.info("cleanded CPA File imported")
-    # Create categories for Level 1 and Level 2 higherarchies
-    CPA2 = CPA.copy()
-    #get highest level of code
-    CPA2.loc[CPA2.Level !=1,'Category_2'] = CPA2[CPA2.Level !=1].Code.str.split('.').str.slice(0,1).str.join('')
-    CPA2.loc[CPA2.Level.isin({3,4,5,6}),'Category_3'] = CPA2.loc[CPA2.Level.isin({3,4,5,6})].Code.str[0:4]
-
-
-    # match up codes and parents
-    Code_parent = CPA2[CPA2.Level==2][['Parent','Category_2']].copy()
-    CPA2 = CPA2.merge(Code_parent.rename(columns={'Parent':'Category_1'}), on='Category_2', how='left')
-
-    # add in the Category_1 fileds for Level1
-    CPA2.loc[CPA2.Level==1, 'Category_1'] = CPA2.loc[CPA2.Level==1,'Code']
+    # The CPA codes have already been cleansed and are now loaded and split into categories
     
-    # we now set up a higher level for A10 indstry levels (10 categories)
-    update_dict0 = {'A':'1','F':'3','J':'5', 'K':'6', 'L':'7','M':'8','N':'8'}
-    update_dict = {**update_dict0,**dict.fromkeys(['B','C','D','E'],'2'),**dict.fromkeys(['G','H','I'],'4'),
-                   **dict.fromkeys(['O','P','Q'],'9'), **dict.fromkeys(['R','S','T','U'],'10')}
+    data_path = "../data/processed/"
+    CPA = pd.read_csv(data_path + "CPA21_cleaned.csv")
+    CPA.columns = [x[4:] for x in CPA.columns]
+    logger.info("cleanded CPA File imported")
+    CPA = CPA.rename(columns={'Description':'Descr','Description_old':'Descr_old'}).copy()
+    
+    CPA2 = file_import_helper.CPA_Categories(CPA)
 
-    CPA2['Category_0'] = CPA2.Category_1.replace(update_dict)
     CPA2.to_csv(data_path + 'CPA_cleaned.csv', index=False)
     return CPA2
 
 def fetch_CN_files():
+    import exclude_remove
+    data_path = '../data/raw/'
+
+    #### read in and process CN 2010 file
+    CN10 = pd.read_excel(data_path + "CN_2010_raw.xls",  skiprows=1,names=['Key','CN_Code', 'Descr'], usecols=[0,1,2], dtype={'Key':str})
+    # read in and merge structure data so we can get the levels
+    CN10st = pd.read_excel(data_path + "CN 2010_structure.xls", usecols=[0,1,2], names=['Key','CN_Code','Level'],  dtype={'Key':str})
+    CN10 = CN10.merge(CN10st[['Key','Level']], on='Key',how='left')
+    CN10 = CN10.sort_values(by='Key')
+    CN10['CN_Code'] = CN10.CN_Code.str.replace(' ','')
+    # clean CN10 data
+    CN10['Exclusions_removed'] = ''
+    CN10 = exclude_remove.remove_exclusions(CN10, 'Descr', 'Exclusions_removed')
+    # select the columns we want
+    CN10=CN10[CN10.Descr_cleaned.notnull()][['Key','CN_Code','Level','Descr_old','Descr_cleaned', 'Exclusions_removed']].rename(columns={'Descr_cleaned':'Descr'})
+
+    # read in CN 2010 file - we have a full description column already here
+    CN20 = pd.read_csv(data_path + "CN_2020_raw.csv", header=None, sep=',', skiprows=1, usecols=[0,1,2,3,4,5,6,7],
+            names=['Order','Level','Key','Parent','CN_Code','CN_Parent','Descrip','Descr'],  dtype={'Key':str, 'Parent':str})
+    # clean CN20 data
+    CN20['CN_Code'] = CN20.CN_Code.str.replace(' ','')
+    CN20 = exclude_remove.remove_exclusions(CN20, 'Descr', 'Exclusions_removed')
+    # select the columns we want
+    CN20=CN20[CN20.Descr_cleaned.notnull()][['Key','CN_Code','Level','Descr_old','Descr_cleaned', 'Exclusions_removed']].rename(columns={'Descr_cleaned':'Descr'})
+
+    return CN10, CN20
+
+def fetch_CN_mapper():
     import exclude_remove
     data_path = '../data/processed/'
 
@@ -123,7 +140,6 @@ def fetch_CN_files():
     logger.info("CN new Files imported and cleaned")
     
     return CC
-
     
 
 def get_category_description(level_wanted):
@@ -187,6 +203,16 @@ def clean_text(text: str):
 
     return no_stopwords
 
+
+def clean_col(df: pd.DataFrame, col: string):
+    """Prepare columns for text processing.
+
+    Returns:
+        Same dataframe with an additional column for cleaned text.
+    """
+    logger.info(f"Cleaning column: {col} ")
+    df[f"{col}_cleaned"] = df[col].fillna("").apply(clean_text)
+    return df
 
 def clean_cols(df: pd.DataFrame, cols: list):
     """Prepare columns for text processing.
@@ -341,7 +367,23 @@ def plotly_scat(df,cat, titl):
     
     return fig
 
-
+# a function to produce a scatter plot
+def scat(plot_df, true_cols):
+    import plotly.express
+    hover = {
+        "Category":False,
+        "x": False,
+        "y": False
+        }
+    for col in true_cols:
+        hover[col] = True
+    fig = plotly.express.scatter(
+            plot_df, 
+            x="x", 
+            y="y", 
+            color="Category",
+            hover_data=hover)
+    return fig
 
 
 def classifier(vector_col: pd.Series, target_col: pd.Series):
@@ -394,14 +436,15 @@ def plot_embedding(df):
 def show_group(df, search_col, start_str):
     l = len(start_str)
     df1 = df[df[search_col].str[:l] == start_str]
-    cols = ['Code', 'Descr', 'Includes','label']
+    #cols = ['Code', 'Level', 'Descr_old', 'Descr', 'Includes', 'Full_descr', 'Descr_cleaned','Full_descr_cleaned',  'label']
+    cols = ['Code', 'Level',  'Descr_cleaned','Full_descr_cleaned',  'label']
     return df1[cols]
     
 def search_col(df, search_col, st):
     st1 = st.lower()
     df1 = df[df[search_col].fillna('').str.contains(st1)]
-    cols = ['Code', 'Descr', 'Includes','label']
-    return df1[cols]
+    #cols = ['Code', 'Level', 'Descr_old', 'Descr', 'Includes', 'Full_descr', 'Descr_cleaned','Full_descr_cleaned',  'label']
+    return df1
 
 
 if __name__ == "__main__":
